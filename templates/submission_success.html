@@ -16,40 +16,35 @@
       margin: 0;
       padding: 20px;
     }
-
     .container {
       background: white;
       border-radius: 12px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.08);
-      padding: 50px;
+      padding: 40px 50px;
       width: 100%;
-      max-width: 600px;
+      max-width: 700px;
       text-align: center;
     }
-
     h1 {
-      color: #e67e22; /* Changed from green to primary orange */
+      color: #e67e22;
       font-size: 32px;
       margin-top: 0;
       margin-bottom: 15px;
       font-weight: 600;
     }
-
     p {
       color: #555;
       font-size: 18px;
       margin-top: 0;
       line-height: 1.6;
     }
-
     .button-container {
       display: flex;
       justify-content: center;
       flex-wrap: wrap;
       gap: 15px;
-      margin-top: 40px;
+      margin-top: 30px;
     }
-
     .btn {
       padding: 12px 28px;
       font-size: 16px;
@@ -61,17 +56,17 @@
       text-decoration: none;
       display: inline-block;
     }
-
-    /* Primary Action: Download */
     .btn-primary {
       background-color: #e67e22;
       color: #fff;
     }
-    .btn-primary:hover {
+    .btn-primary:hover:not(:disabled) {
       background-color: #d35400;
     }
-
-    /* Secondary Action: Upload More */
+    .btn-primary:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
     .btn-secondary {
       background-color: #fff;
       color: #e67e22;
@@ -82,16 +77,36 @@
       color: #d35400;
       border-color: #d35400;
     }
-
-    /* Tertiary Action: Close */
     .btn-tertiary {
-        background-color: #6c757d;
-        color: #fff;
+      background-color: #6c757d;
+      color: #fff;
     }
     .btn-tertiary:hover {
-        background-color: #5a6268;
+      background-color: #5a6268;
     }
 
+    .debug-section {
+      margin-top: 40px;
+      padding: 15px;
+      border: 1px dashed #ccc;
+      background-color: #fafafa;
+      text-align: left;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .debug-section h3 {
+      margin-top: 0;
+      font-size: 16px;
+      color: #333;
+    }
+    .debug-section pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      font-size: 12px;
+      background-color: #eee;
+      padding: 10px;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
@@ -101,8 +116,14 @@
     <p>Your records have been saved. You can now download the submitted data as a CSV file or return to the upload page.</p>
 
     <div class="button-container">
-      <form action="{{ url_for('download_csvs') }}" method="get">
-        <button type="submit" class="btn btn-primary">Download CSV</button>
+      <form action="{{ url_for('download_csvs') }}" method="post">
+        {% if submitted_data %}
+          <!-- 使用 <textarea hidden> 避免转义问题 -->
+          <textarea name="submitted_data_json" hidden>{{ submitted_data | tojson }}</textarea>
+          <button type="submit" class="btn btn-primary">Download CSV</button>
+        {% else %}
+          <button type="submit" class="btn btn-primary" disabled title="No data to download">Download CSV</button>
+        {% endif %}
       </form>
 
       <form action="{{ url_for('upload_file') }}" method="get">
@@ -110,6 +131,16 @@
       </form>
 
       <button type="button" class="btn btn-tertiary" onclick="window.close()">Close Page</button>
+    </div>
+
+    <div class="debug-section">
+      <h3>Debugging Information</h3>
+      {% if submitted_data %}
+        <p>The following data is available for CSV download:</p>
+        <pre>{{ submitted_data | tojson(indent=2) }}</pre>
+      {% else %}
+        <p style="color: red; font-weight: bold;">Warning: No data was passed to this page. The CSV file will be empty.</p>
+      {% endif %}
     </div>
   </div>
 

@@ -5,24 +5,28 @@ import os # Import the 'os' module to access environment variables
 
 def get_connection():
     """
-    Establishes and returns a connection to the MySQL database.
-    It reads connection details from environment variables for deployment,
-    with fallback default values for local development.
+    Establishes a connection to the MySQL database.
+    Reads connection details from environment variables and enables SSL.
     """
-    # Read database credentials from environment variables.
-    # The second argument is the default value, used if the environment variable is not set.
-    db_host = os.environ.get('DB_HOST', 'localhost')
-    db_user = os.environ.get('DB_USER', 'root')
-    db_password = os.environ.get('DB_PASSWORD', 'zoetisproject123!')
-    db_name = os.environ.get('DB_NAME', 'voice_records')
+
+    db_host = os.environ.get('DB_HOST')
+    db_user = os.environ.get('DB_USER')
+    db_password = os.environ.get('DB_PASSWORD')
+    db_name = os.environ.get('DB_NAME')
+    db_port = int(os.environ.get('DB_PORT', 35513))
+
+    if not all([db_host, db_user, db_password, db_name, db_port]):
+        raise Exception("One or more database environment variables are not set.")
 
     return pymysql.connect(
         host=db_host,
         user=db_user,
         password=db_password,
         database=db_name,
+        port=db_port,
         cursorclass=pymysql.cursors.DictCursor,
-        autocommit=False
+        autocommit=False,
+        ssl_verify_cert=False
     )
 
 def get_sales_rep_id(rep_name, connection):

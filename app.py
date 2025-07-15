@@ -1,4 +1,5 @@
 from flask import Flask, request, redirect, url_for, session, render_template, flash, send_file, jsonify
+from flask.sessions import SecureCookieSessionInterface
 import os, csv, io, json, zipfile, re
 import whisper
 from transformers import pipeline
@@ -9,7 +10,13 @@ from datetime import datetime
 from rapidfuzz import fuzz
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'
+# 从环境变量读取密钥，这对于安全的 session 至关重要
+app.secret_key = os.environ.get('SECRET_KEY', 'a_very_secure_default_secret_key_for_dev')
+
+# 设置一个更健壮的 session 接口
+session_interface = SecureCookieSessionInterface()
+app.session_interface = session_interface
+
 app.config['UPLOAD_FOLDER'] = 'uploads'
 ALLOWED_EXTENSIONS = {'wav', 'mp3', 'm4a'}
 
@@ -18,12 +25,12 @@ ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
 os.environ['PATH'] += os.pathsep + os.path.dirname(ffmpeg_path)
 
 print("Loading Whisper model...")
-whisper_model = whisper.load_model("base")
+whisper_model = whisper.load_model("base", download_root="/app/models_cache")
 print("Loading NER model...")
 ner_model = pipeline("ner", model="dslim/bert-base-NER", grouped_entities=True)
 print("Models loaded successfully.")
 
-# --- Unchanged Functions ---
+# --- Helper Functions (No Changes) ---
 product_keywords = [
     "canine vaccines", "dental cleaning kits", "deworming tablets",
     "diagnostic equipment", "feline vaccines", "flea & tick prevention kits",
@@ -200,14 +207,11 @@ def upload_file():
 def submit_existing():
     count = int(request.form.get("count", 0))
     new_clients_from_upload = json.loads(request.form.get("new_clients_json", "[]"))
-
     existing_interactions, confirmed_new_clients = [], []
     processed_keys = set()
-
     with get_connection() as connection:
         for i in range(count):
             decision = request.form.get(f"clinic_decision_{i}", "existing")
-
             record_data = {
                 "clinic_id": request.form.get(f"clinic_id_{i}"),
                 "Clinic_Name": request.form.get(f"clinic_name_{i}", "").strip(),
@@ -223,11 +227,9 @@ def submit_existing():
                 "transcription": request.form.get(f"transcription_{i}", "").strip(),
                 "filename": request.form.get(f"filename_{i}", "").strip()
             }
-
             if decision == "new":
                 confirmed_new_clients.append(record_data)
                 continue
-
             clinic_id = record_data["clinic_id"]
             if not clinic_id:
                 with connection.cursor() as cursor:
@@ -236,13 +238,10 @@ def submit_existing():
                     row = cursor.fetchone()
                     clinic_id = row["Clinic_ID"] if row else None
             if not clinic_id: continue
-
             interaction_key = (clinic_id, record_data["Product_Interest"].lower(), record_data["Rep_Name"].lower())
             if interaction_key in processed_keys: continue
-
             interaction_date, crm_created_date = insert_interaction(clinic_id, record_data, connection)
             processed_keys.add(interaction_key)
-
             existing_interactions.append({
                 "Clinic_ID": clinic_id, "Contact_Name": record_data["Contact_Name"],
                 "Rep_Name": record_data["Rep_Name"],
@@ -254,9 +253,7 @@ def submit_existing():
                 "Transcription": record_data["transcription"], "Filename": record_data["filename"]
             })
         connection.commit()
-
     final_new_clients = new_clients_from_upload + confirmed_new_clients
-
     seen_filenames = set()
     unique_new_clients = []
     for client in final_new_clients:
@@ -264,14 +261,19 @@ def submit_existing():
             unique_new_clients.append(client)
             seen_filenames.add(client['filename'])
         elif not client.get('filename'):
-             unique_new_clients.append(client)
+            unique_new_clients.append(client)
 
-    session["submitted_interactions"] = session.get("submitted_interactions", []) + existing_interactions
-    flash("Existing clinic interactions processed successfully.")
+    # 将已处理的现有诊所数据存入 session，以便在下一步合并
+    session["interactions_from_existing"] = existing_interactions
+
+    # 如果没有需要创建的新诊所，直接渲染成功页面，并把数据传过去
+    if not unique_new_clients:
+        return render_template("submission_success.html", submitted_data=existing_interactions)
+
+    # 否则，跳转到新诊所创建页面
     return render_template("bulk_new_clinic_form.html", new_clients=unique_new_clients)
 
 
-# --- Other routes are unchanged ---
 @app.route("/submit_new_clinics", methods=["POST"])
 def submit_new_clinics():
     count = int(request.form.get("count", 0))
@@ -318,8 +320,15 @@ def submit_new_clinics():
                      "Last_Contacted": last_contacted, "Additional_Notes": additional_notes,
                      "CRM_Created_Date": crm_created_date, "Transcription": transcription, "Filename": filename})
         connection.commit()
-    session["submitted_interactions"] = session.get("submitted_interactions", []) + new_interaction_records
-    return redirect(url_for("submission_success"))
+
+    # 从 session 中取出之前保存的 existing interactions
+    interactions_from_existing = session.pop("interactions_from_existing", [])
+
+    # 将新旧数据合并
+    all_submitted_data = interactions_from_existing + new_interaction_records
+
+    # 直接渲染成功页面，并把所有合并后的数据传过去
+    return render_template("submission_success.html", submitted_data=all_submitted_data)
 
 
 @app.route("/get_product_list")
@@ -352,13 +361,19 @@ def get_rep_list():
 
 @app.route("/submission_success")
 def submission_success():
-    return render_template("submission_success.html")
+    # 这个路由现在主要用于直接访问的情况，正常流程不会再跳转到这里
+    return render_template("submission_success.html", submitted_data=[])
 
 
-@app.route("/download_csvs")
+@app.route("/download_csvs", methods=['GET', 'POST'])
 def download_csvs():
-    interactions = session.get("submitted_interactions", [])
-    if not interactions: return "No CRM interaction data available.", 400
+    # 从 POST 请求的表单中获取数据
+    interactions_json = request.form.get('submitted_data_json')
+    if not interactions_json:
+        return "No data received for download.", 400
+
+    interactions = json.loads(interactions_json)
+
     memory_file = io.BytesIO()
     with zipfile.ZipFile(memory_file, "w", zipfile.ZIP_DEFLATED) as zipf:
         crm_buffer = io.StringIO()
@@ -369,10 +384,12 @@ def download_csvs():
         writer.writeheader()
         writer.writerows(interactions)
         zipf.writestr("crm_interaction.csv", crm_buffer.getvalue())
-    session.pop("submitted_interactions", None)
+
+    # 清理 session
+    session.pop("interactions_from_existing", None)
+
     memory_file.seek(0)
     return send_file(memory_file, mimetype='application/zip', as_attachment=True, download_name="crm_interactions.zip")
-
 
 # if __name__ == '__main__':
 #     if not os.path.exists(app.config['UPLOAD_FOLDER']):
