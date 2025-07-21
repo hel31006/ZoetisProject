@@ -185,14 +185,12 @@
             <select name="samples_given_{{ loop.index0 }}">
               <option value="Yes" {% if record.Samples_Given == "Yes" %}selected{% endif %}>Yes</option>
               <option value="No" {% if record.Samples_Given == "No" %}selected{% endif %}>No</option>
-              <option value="Unknown" {% if record.Samples_Given == "Unknown" %}selected{% endif %}>Unknown</option>
             </select>
           </td>
           <td>
             <select name="follow_up_{{ loop.index0 }}">
               <option value="Yes" {% if record.Follow_Up == "Yes" %}selected{% endif %}>Yes</option>
               <option value="No" {% if record.Follow_Up == "No" %}selected{% endif %}>No</option>
-              <option value="Unknown" {% if record.Follow_Up == "Unknown" %}selected{% endif %}>Unknown</option>
             </select>
           </td>
           <td>

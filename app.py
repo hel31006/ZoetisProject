@@ -271,11 +271,17 @@ def submit_existing():
         return render_template("submission_success.html", submitted_data=existing_interactions)
 
     # 否则，跳转到新诊所创建页面
-    return render_template("bulk_new_clinic_form.html", new_clients=unique_new_clients)
+    return render_template("bulk_new_clinic_form.html",
+                           new_clients=unique_new_clients,
+                           existing_clients_json=json.dumps(existing_interactions))
 
 
 @app.route("/submit_new_clinics", methods=["POST"])
 def submit_new_clinics():
+
+    existing_clients_json = request.form.get('existing_clients_json', '[]')
+    interactions_from_existing = json.loads(existing_clients_json)
+
     count = int(request.form.get("count", 0))
     new_interaction_records = []
     with get_connection() as connection:
@@ -321,8 +327,6 @@ def submit_new_clinics():
                      "CRM_Created_Date": crm_created_date, "Transcription": transcription, "Filename": filename})
         connection.commit()
 
-    # 从 session 中取出之前保存的 existing interactions
-    interactions_from_existing = session.pop("interactions_from_existing", [])
 
     # 将新旧数据合并
     all_submitted_data = interactions_from_existing + new_interaction_records

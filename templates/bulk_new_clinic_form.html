@@ -141,6 +141,9 @@
   <h2>Create New Clinic and Interaction Records</h2>
 
   <form method="POST" action="{{ url_for('submit_new_clinics') }}">
+
+    <input type="hidden" name="existing_clients_json" value="{{ existing_clients_json or '[]' }}">
+
     {% for clinic in new_clients %}
     <fieldset>
       <legend>New Clinic Record {{ loop.index }}</legend>
@@ -222,7 +225,6 @@
           <select name="follow_up_{{ loop.index0 }}">
             <option value="Yes" {% if clinic.Follow_Up == "Yes" %}selected{% endif %}>Yes</option>
             <option value="No" {% if clinic.Follow_Up == "No" %}selected{% endif %}>No</option>
-            <option value="Unknown" {% if clinic.Follow_Up == "Unknown" %}selected{% endif %}>Unknown</option>
           </select>
         </div>
 
@@ -231,7 +233,6 @@
           <select name="samples_given_{{ loop.index0 }}">
             <option value="Yes" {% if clinic.Samples_Given == "Yes" %}selected{% endif %}>Yes</option>
             <option value="No" {% if clinic.Samples_Given == "No" %}selected{% endif %}>No</option>
-            <option value="Unknown" {% if clinic.Samples_Given == "Unknown" %}selected{% endif %}>Unknown</option>
           </select>
         </div>
 
