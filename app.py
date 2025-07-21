@@ -10,10 +10,10 @@ from datetime import datetime
 from rapidfuzz import fuzz
 
 app = Flask(__name__)
-# 从环境变量读取密钥，这对于安全的 session 至关重要
+
 app.secret_key = os.environ.get('SECRET_KEY', 'a_very_secure_default_secret_key_for_dev')
 
-# 设置一个更健壮的 session 接口
+
 session_interface = SecureCookieSessionInterface()
 app.session_interface = session_interface
 
@@ -263,14 +263,14 @@ def submit_existing():
         elif not client.get('filename'):
             unique_new_clients.append(client)
 
-    # 将已处理的现有诊所数据存入 session，以便在下一步合并
+    
     session["interactions_from_existing"] = existing_interactions
 
-    # 如果没有需要创建的新诊所，直接渲染成功页面，并把数据传过去
+    
     if not unique_new_clients:
         return render_template("submission_success.html", submitted_data=existing_interactions)
 
-    # 否则，跳转到新诊所创建页面
+    
     return render_template("bulk_new_clinic_form.html",
                            new_clients=unique_new_clients,
                            existing_clients_json=json.dumps(existing_interactions))
@@ -328,10 +328,10 @@ def submit_new_clinics():
         connection.commit()
 
 
-    # 将新旧数据合并
+  
     all_submitted_data = interactions_from_existing + new_interaction_records
 
-    # 直接渲染成功页面，并把所有合并后的数据传过去
+    
     return render_template("submission_success.html", submitted_data=all_submitted_data)
 
 
@@ -365,13 +365,13 @@ def get_rep_list():
 
 @app.route("/submission_success")
 def submission_success():
-    # 这个路由现在主要用于直接访问的情况，正常流程不会再跳转到这里
+    
     return render_template("submission_success.html", submitted_data=[])
 
 
 @app.route("/download_csvs", methods=['GET', 'POST'])
 def download_csvs():
-    # 从 POST 请求的表单中获取数据
+    
     interactions_json = request.form.get('submitted_data_json')
     if not interactions_json:
         return "No data received for download.", 400
@@ -389,7 +389,7 @@ def download_csvs():
         writer.writerows(interactions)
         zipf.writestr("crm_interaction.csv", crm_buffer.getvalue())
 
-    # 清理 session
+   
     session.pop("interactions_from_existing", None)
 
     memory_file.seek(0)
